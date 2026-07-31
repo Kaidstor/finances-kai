@@ -22,12 +22,18 @@ const usage = `finances-kai — учёт доходов и расходов из
   add <сумма> [описание]      создать платёж; сумма с минусом — расход
   new <шаблон> [сумма]        создать платёж по шаблону
   show <id>                   карточка платежа
+  edit <id> [поля]            изменить платёж
   rm <id>                     удалить платёж
+  attach <id> <файл>…         приложить файлы (чеки, счета)
+
+Аналитика:
+  stats [фильтры]             сводка по тегам за период
+  forecast [--months N]       прогноз трат по подпискам
 
 Справочники:
   tags [add <имя>]            теги
   cp [add <имя>]              контрагенты (полное имя: counterparties)
-  templates                   шаблоны
+  templates [add|rm]          шаблоны
 
 Прочее:
   export [фильтры]            zip со счетами за период
@@ -72,8 +78,16 @@ func Run(args []string) int {
 		err = cmdNew(ctx, rest)
 	case "show":
 		err = cmdShow(ctx, rest)
+	case "edit":
+		err = cmdEdit(ctx, rest)
 	case "rm", "delete":
 		err = cmdRemove(ctx, rest)
+	case "attach":
+		err = cmdAttach(ctx, rest)
+	case "stats":
+		err = cmdStats(ctx, rest)
+	case "forecast":
+		err = cmdForecast(ctx, rest)
 	case "tags":
 		err = cmdTags(ctx, rest)
 	case "cp", "counterparties":

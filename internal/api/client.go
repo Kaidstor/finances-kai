@@ -11,8 +11,11 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -131,6 +134,103 @@ func (c *Client) CreatePayment(ctx context.Context, p CreatePayment) (Payment, e
 
 func (c *Client) DeletePayment(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/api/payments/"+url.PathEscape(id), nil, nil)
+}
+
+func (c *Client) UpdatePayment(ctx context.Context, id string, p UpdatePayment) (Payment, error) {
+	var out Payment
+	return out, c.do(ctx, http.MethodPatch, "/api/payments/"+url.PathEscape(id), p, &out)
+}
+
+func (c *Client) PaymentFiles(ctx context.Context, paymentID string) ([]PaymentFile, error) {
+	var out []PaymentFile
+	return out, c.do(ctx, http.MethodGet,
+		"/api/payments/"+url.PathEscape(paymentID)+"/files", nil, &out)
+}
+
+func (c *Client) DeletePaymentFile(ctx context.Context, paymentID, fileID string) error {
+	return c.do(ctx, http.MethodDelete,
+		"/api/payments/"+url.PathEscape(paymentID)+"/files?fileId="+url.QueryEscape(fileID), nil, nil)
+}
+
+// UploadFile отправляет файл в multipart-форму поля "file" — как это делает
+// веб-форма; JSON здесь сервер не принимает.
+//
+// contentType задаётся явно: CreateFormFile ставит частям
+// application/octet-stream, а сервер сверяет тип с белым списком и такой
+// запрос отвергает.
+func (c *Client) UploadFile(ctx context.Context, paymentID, name, contentType string, content []byte) (PaymentFile, error) {
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", fmt.Sprintf(
+		`form-data; name="file"; filename=%q`, name))
+	header.Set("Content-Type", contentType)
+	part, err := mw.CreatePart(header)
+	if err != nil {
+		return PaymentFile{}, err
+	}
+	if _, err := part.Write(content); err != nil {
+		return PaymentFile{}, err
+	}
+	if err := mw.Close(); err != nil {
+		return PaymentFile{}, err
+	}
+
+	path := "/api/payments/" + url.PathEscape(paymentID) + "/files"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, &body)
+	if err != nil {
+		return PaymentFile{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return PaymentFile{}, fmt.Errorf("загрузка файла: %w", err)
+	}
+	defer resp.Body.Close()
+
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return PaymentFile{}, fmt.Errorf("загрузка файла: читаю ответ: %w", err)
+	}
+
+	var env envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return PaymentFile{}, fmt.Errorf("загрузка файла: сервер ответил %s, а не JSON: %s",
+			resp.Status, snippet(raw))
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		return PaymentFile{}, fmt.Errorf("%w: %s", ErrUnauthorized, env.Error)
+	}
+	if !env.Success {
+		if env.Error == "" {
+			env.Error = resp.Status
+		}
+		return PaymentFile{}, fmt.Errorf("загрузка файла: %s", env.Error)
+	}
+
+	var out PaymentFile
+	return out, json.Unmarshal(env.Data, &out)
+}
+
+func (c *Client) CreateTemplate(ctx context.Context, t CreateTemplate) (Template, error) {
+	var out Template
+	return out, c.do(ctx, http.MethodPost, "/api/templates", t, &out)
+}
+
+func (c *Client) DeleteTemplate(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/api/templates/"+url.PathEscape(id), nil, nil)
+}
+
+func (c *Client) Forecast(ctx context.Context, months int) (Forecast, error) {
+	var out Forecast
+	path := "/api/forecast"
+	if months > 0 {
+		path += "?months=" + strconv.Itoa(months)
+	}
+	return out, c.do(ctx, http.MethodGet, path, nil, &out)
 }
 
 func (c *Client) Tags(ctx context.Context) ([]Tag, error) {

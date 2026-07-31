@@ -104,7 +104,11 @@ func (t *Table) Render(w io.Writer) {
 		}
 	}
 
-	fmt.Fprintln(w, Dim(line(t.head, widths, t.right)))
+	// Таблица из одних значений (например, итоги) заводится с пустой шапкой —
+	// печатать её значит выводить пустую строку.
+	if header := line(t.head, widths, t.right); strings.TrimSpace(header) != "" {
+		fmt.Fprintln(w, Dim(header))
+	}
 	for _, row := range t.rows {
 		fmt.Fprintln(w, line(row, widths, t.right))
 	}

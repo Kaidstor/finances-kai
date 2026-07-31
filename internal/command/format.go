@@ -17,6 +17,21 @@ import (
 // Пустой текст: fail() по нему понимает, что своё сообщение добавлять не надо.
 var errParsed = errors.New("")
 
+func strPtr(s string) *string { return &s }
+
+// isSet отличает «флаг не передавали» от «передали пустое значение». Нужно
+// там, где пустая строка — осмысленный ввод: `--expense` без суммы задаёт
+// направление шаблона, а `--description ""` стирает описание платежа.
+func isSet(fs *flag.FlagSet, name string) bool {
+	found := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
 func deref(s *string) string {
 	if s == nil {
 		return ""

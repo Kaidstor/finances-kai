@@ -27,6 +27,8 @@ just install-skill    # подключить скилл агенту
 go build -o ~/.local/bin/finances-kai .
 ```
 
+`just` ставится через `cargo install just` или `brew install just`.
+
 ## Первый запуск
 
 Токен выпускается в приложении: **/settings → «API Токены»**.
@@ -51,10 +53,14 @@ finances-kai doctor   # проверить, что всё сошлось
 | `add <сумма> [описание]` | создать платёж; минус — расход |
 | `new <шаблон> [сумма]` | создать по шаблону |
 | `show <id>` | карточка платежа |
+| `edit <id> [поля]` | изменить платёж |
 | `rm <id>` | удалить платёж |
+| `attach <id> <файл>…` | приложить чеки и счета |
+| `stats [фильтры]` | сводка по тегам |
+| `forecast [--months N]` | прогноз по подпискам |
 | `tags`, `tags add <имя>` | теги |
 | `cp`, `cp add <имя>` | контрагенты |
-| `templates` | шаблоны |
+| `templates`, `templates add/rm` | шаблоны |
 | `export [фильтры]` | zip со счетами |
 | `login`, `profile`, `doctor` | подключение |
 
@@ -66,11 +72,35 @@ finances-kai add -1500 "подписка" --cp Netflix --currency USD --date yes
 finances-kai new обед                      # сумма и теги из шаблона
 finances-kai new аренда 45000 --date 2026-08-01
 
+finances-kai edit 11111111 --amount -300 --paid
+finances-kai edit 11111111 --tag еда --tag кафе    # теги заменяются целиком
+finances-kai attach 11111111 ~/Downloads/чек.pdf
+
 finances-kai ls --period year --type expense --tag еда
 finances-kai ls --from 2026-01-01 --to 2026-03-31 --json | jq '.[].amount'
 
+finances-kai stats --period year
+finances-kai forecast --by-subscription
+
+finances-kai templates add "обед" --amount 450 --tag еда --paid
 finances-kai export --period year -o 2026.zip
 ```
+
+### Вложения
+
+`attach` принимает jpg, png, gif, webp, pdf, txt, csv, doc(x), xls(x) до 10 МБ —
+тот же список, что и веб-форма. Расширение и размер проверяются до отправки,
+MIME-тип проставляется по расширению: сервер сверяет его с белым списком и
+`application/octet-stream`, который Go ставит по умолчанию, не принимает.
+
+Вложения попадают в архив `export` вместе со счетами.
+
+### Сводка
+
+`stats` группирует по тегам и считает в базовой валюте пользователя. Платёж с
+несколькими тегами попадает в каждый **целиком**, поэтому сумма долей бывает
+больше 100%: доля отвечает на «сколько прошло через тег», а не «какая часть
+от целого». Платежи без тегов сводятся в строку «без тега».
 
 Теги и контрагенты указываются **именем**, не UUID. Совпадение ищется без учёта
 регистра: сначала точное, потом по подстроке. Если под запрос подходит
@@ -87,8 +117,11 @@ finances-kai export --period year -o 2026.zip
 --type income|expense
 --status paid|unpaid                 только у ls
 --search <подстрока>                 только у ls, по описанию
---limit N                            только у ls, 0 — без ограничения
+--limit N                            только у ls и stats, 0 — без ограничения
 ```
+
+`stats` понимает `--period`, `--from`, `--to` и `--income`; теги и контрагентов
+он не фильтрует — по ним он и группирует.
 
 `--period week` — текущая неделя с понедельника, `month` и `year` —
 календарные. У `ls` отбор идёт на стороне CLI (в `GET /api/payments` фильтров
