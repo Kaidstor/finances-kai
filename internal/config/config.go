@@ -20,9 +20,22 @@ type Profile struct {
 	Currency string `json:"currency,omitempty"`
 }
 
+// ExportPreset — сохранённый набор фильтров для export. Теги и контрагенты
+// хранятся именами, а не идентификаторами: набор остаётся читаемым, переживает
+// пересоздание тега и работает в любом профиле, где есть такие же имена.
+type ExportPreset struct {
+	Period         string   `json:"period,omitempty"`
+	From           string   `json:"from,omitempty"`
+	To             string   `json:"to,omitempty"`
+	Type           string   `json:"type,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	Counterparties []string `json:"counterparties,omitempty"`
+}
+
 type Config struct {
-	Current  string             `json:"current"`
-	Profiles map[string]Profile `json:"profiles"`
+	Current  string                  `json:"current"`
+	Profiles map[string]Profile      `json:"profiles"`
+	Exports  map[string]ExportPreset `json:"exports,omitempty"`
 }
 
 // Dir — каталог конфигурации; FINANCES_KAI_HOME его переопределяет.
@@ -92,6 +105,22 @@ func (c *Config) Names() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func (c *Config) ExportNames() []string {
+	names := make([]string, 0, len(c.Exports))
+	for name := range c.Exports {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (c *Config) SetExport(name string, p ExportPreset) {
+	if c.Exports == nil {
+		c.Exports = map[string]ExportPreset{}
+	}
+	c.Exports[name] = p
 }
 
 // Resolve возвращает профиль, который нужно использовать: явно названный,
