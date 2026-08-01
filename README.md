@@ -17,6 +17,10 @@ $ finances-kai ls --period month
 
 Звёздочка у суммы — платёж не оплачен.
 
+📖 Полная документация:
+[«finances-kai — учёт финансов из терминала»](https://notes.kaidstor.ru/021c9fd8-b19f-4c76-acd0-1486e8d1b501)
+([`docs/finances-kai.md`](docs/finances-kai.md)).
+
 ## Установка
 
 ```bash
