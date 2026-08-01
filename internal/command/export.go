@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Kaidstor/finances-next/cli/internal/config"
-	"github.com/Kaidstor/finances-next/cli/internal/output"
+	"github.com/Kaidstor/finances-kai/internal/config"
+	"github.com/Kaidstor/finances-kai/internal/output"
 )
 
 const exportHelp = `finances-kai export [набор] [фильтры] — zip со счетами за период

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Kaidstor/finances-next/cli/internal/api"
+	"github.com/Kaidstor/finances-kai/internal/api"
 )
 
 // Смысл CLI поверх curl — принимать имена, а не UUID. Здесь имена из флагов

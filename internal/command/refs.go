@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Kaidstor/finances-next/cli/internal/api"
-	"github.com/Kaidstor/finances-next/cli/internal/output"
+	"github.com/Kaidstor/finances-kai/internal/api"
+	"github.com/Kaidstor/finances-kai/internal/output"
 )
 
 const tagsHelp = `finances-kai tags [add <имя>] — теги

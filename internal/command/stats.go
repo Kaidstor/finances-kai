@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Kaidstor/finances-next/cli/internal/api"
-	"github.com/Kaidstor/finances-next/cli/internal/output"
+	"github.com/Kaidstor/finances-kai/internal/api"
+	"github.com/Kaidstor/finances-kai/internal/output"
 )
 
 const statsHelp = `finances-kai stats [фильтры] — сводка по тегам за период

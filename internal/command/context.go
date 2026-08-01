@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Kaidstor/finances-next/cli/internal/api"
-	"github.com/Kaidstor/finances-next/cli/internal/config"
-	"github.com/Kaidstor/finances-next/cli/internal/keyring"
+	"github.com/Kaidstor/finances-kai/internal/api"
+	"github.com/Kaidstor/finances-kai/internal/config"
+	"github.com/Kaidstor/finances-kai/internal/keyring"
 )
 
 // session — всё, что нужно команде: клиент, имя профиля и его настройки.

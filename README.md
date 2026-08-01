@@ -1,7 +1,8 @@
 # finances-kai
 
-CLI к приложению учёта доходов и расходов: тот же HTTP-API, что у веба и
-raycast-расширения, авторизация по API-токену.
+CLI к приложению учёта доходов и расходов
+[finances](https://github.com/Kaidstor/finances-next): тот же HTTP-API, что у
+веба и raycast-расширения, авторизация по API-токену.
 
 ```
 $ finances-kai ls --period month
@@ -19,8 +20,13 @@ $ finances-kai ls --period month
 ## Установка
 
 ```bash
-cd cli
-just install          # в ~/.local/bin
+brew install kaidstor/tap/finances-kai
+```
+
+Из исходников:
+
+```bash
+just install          # сборка в ~/.local/bin
 just install-skill    # подключить скилл агенту
 
 # без just:
@@ -186,3 +192,20 @@ just build
 Устройство: тонкий `main.go`, всё остальное в `internal/` —
 `command` (роутер и команды), `api` (HTTP-клиент), `config` (профили),
 `keyring` (токены), `output` (таблицы, цвета, форматирование).
+Из зависимостей — только стандартная библиотека.
+
+## Релиз
+
+```bash
+./release.sh              # patch: 0.1.0 → 0.1.1
+./release.sh minor        # или major, или явное v1.2.3
+./release.sh -n minor     # dry-run
+```
+
+Скрипт проверяет состояние ветки, гоняет `gofmt`/`vet`/`test` и ставит тег.
+Пуш тега запускает [release.yml](.github/workflows/release.yml): goreleaser
+собирает бинарники (darwin/linux × amd64/arm64), создаёт GitHub Release и
+обновляет cask в [kaidstor/homebrew-tap](https://github.com/kaidstor/homebrew-tap).
+
+Для пуша cask в tap нужен secret `HOMEBREW_TAP_GITHUB_TOKEN` — PAT с правом
+записи в tap-репозиторий.

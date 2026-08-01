@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Kaidstor/finances-next/cli/internal/api"
-	"github.com/Kaidstor/finances-next/cli/internal/output"
+	"github.com/Kaidstor/finances-kai/internal/api"
+	"github.com/Kaidstor/finances-kai/internal/output"
 )
 
 const editHelp = `finances-kai edit <id> [что менять] — правка платежа

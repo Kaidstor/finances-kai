@@ -13,7 +13,7 @@ package main
 import (
 	"os"
 
-	"github.com/Kaidstor/finances-next/cli/internal/command"
+	"github.com/Kaidstor/finances-kai/internal/command"
 )
 
 func main() { os.Exit(command.Run(os.Args[1:])) }

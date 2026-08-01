@@ -16,7 +16,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Kaidstor/finances-next/cli/internal/config"
+	"github.com/Kaidstor/finances-kai/internal/config"
 )
 
 const service = "finances-kai"

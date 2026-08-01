@@ -8,10 +8,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Kaidstor/finances-next/cli/internal/api"
-	"github.com/Kaidstor/finances-next/cli/internal/config"
-	"github.com/Kaidstor/finances-next/cli/internal/keyring"
-	"github.com/Kaidstor/finances-next/cli/internal/output"
+	"github.com/Kaidstor/finances-kai/internal/api"
+	"github.com/Kaidstor/finances-kai/internal/config"
+	"github.com/Kaidstor/finances-kai/internal/keyring"
+	"github.com/Kaidstor/finances-kai/internal/output"
 )
 
 const loginHelp = `finances-kai login — сохранить API-токен профиля

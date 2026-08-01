@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Kaidstor/finances-next/cli/internal/output"
+	"github.com/Kaidstor/finances-kai/internal/output"
 )
 
 // Соответствие повторяет ALLOWED_EXTENSIONS и ALLOWED_MIME_TYPES из

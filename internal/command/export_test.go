@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Kaidstor/finances-next/cli/internal/config"
+	"github.com/Kaidstor/finances-kai/internal/config"
 )
 
 // exportFlags повторяет набор флагов cmdExport — нужен, чтобы mergePreset

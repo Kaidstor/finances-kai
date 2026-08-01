@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Kaidstor/finances-next/cli/internal/api"
+	"github.com/Kaidstor/finances-kai/internal/api"
 )
 
 const usage = `finances-kai — учёт доходов и расходов из терминала

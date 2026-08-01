@@ -1,7 +1,7 @@
 set shell := ["bash", "-cu"]
 
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
-ldflags := "-s -w -X github.com/Kaidstor/finances-next/cli/internal/command.version=" + version
+ldflags := "-s -w -X github.com/Kaidstor/finances-kai/internal/command.version=" + version
 
 # Список рецептов
 default:

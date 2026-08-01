@@ -1,0 +1,65 @@
+# GoReleaser — готовые бинарники finances-kai + Homebrew-cask, чтобы ставить CLI без Go.
+# Запуск: в CI на push git-тега `v*` (см. .github/workflows/release.yml) либо
+# локально `goreleaser release --clean` (нужен goreleaser и токены).
+# Проверить конфиг: `goreleaser check`. Сухой прогон: `goreleaser release --snapshot --clean`.
+#
+# РАСКЛАДКА РЕПО: go.mod лежит в корне, поэтому `dir` не задан. Если модуль
+# переедет в подпапку — добавь `dir: <папка>` в builds.
+version: 2
+
+project_name: finances-kai
+
+builds:
+  - id: finances-kai
+    main: .
+    binary: finances-kai
+    env:
+      - CGO_ENABLED=0 # keyring дёргает security/secret-tool через exec, cgo не нужен → статический бинарь
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/Kaidstor/finances-kai/internal/command.version={{ .Version }}
+
+archives:
+  - id: finances-kai
+    formats: [tar.gz]
+    name_template: "finances-kai_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^chore:"]
+
+# Автогенерация и пуш Homebrew-cask в tap-репозиторий. Пользователи ставят так:
+#   brew install kaidstor/tap/finances-kai
+# Cask, а не formula: ключ `brews` в goreleaser устарел, а для готового бинарника
+# Homebrew предпочитает cask.
+homebrew_casks:
+  - name: finances-kai
+    repository:
+      owner: kaidstor
+      name: homebrew-tap # публичный репо github.com/kaidstor/homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}" # PAT с правом записи в tap-репо (secret в CI)
+    directory: Casks
+    homepage: "https://github.com/Kaidstor/finances-kai"
+    description: "CLI для учёта доходов и расходов: платежи, шаблоны, чеки, сводка и экспорт счетов из терминала"
+    binaries:
+      - finances-kai
+    commit_author:
+      name: goreleaser
+      email: goreleaser@users.noreply.github.com
+    # Неподписанный бинарь: без снятия карантина Gatekeeper блокирует запуск.
+    hooks:
+      pre:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/finances-kai"]
+          end
