@@ -251,12 +251,14 @@ const newHelp = `finances-kai new <шаблон> [сумма] — создать
 Если сумма не указана, берётся из шаблона.
 
   finances-kai new обед
-  finances-kai new "аренда" 45000 --date yesterday`
+  finances-kai new "аренда" 45000 --date yesterday
+  finances-kai new обед --description "бизнес-ланч у офиса"`
 
 func cmdNew(ctx context.Context, args []string) error {
 	fs, profile, asJSON := newFlagSet("new", newHelp)
 	date := fs.String("date", "today", "today|yesterday|tomorrow|YYYY-MM-DD")
 	paid := fs.Bool("paid", false, "пометить оплаченным (иначе статус берётся из шаблона)")
+	description := fs.String("description", "", "описание вместо взятого из шаблона; пустая строка — без описания")
 
 	words, flags := splitLeading(args)
 	if err := fs.Parse(flags); err != nil {
@@ -332,9 +334,13 @@ func cmdNew(ctx context.Context, args []string) error {
 		TagIDs:          tpl.TagIDs,
 		CounterpartyIDs: tpl.CounterpartyIDs,
 	}
-	if d := strings.TrimSpace(deref(tpl.Description)); d != "" {
+	switch {
+	case isSet(fs, "description"):
+		req.Description = description
+	case strings.TrimSpace(deref(tpl.Description)) != "":
+		d := strings.TrimSpace(deref(tpl.Description))
 		req.Description = &d
-	} else {
+	default:
 		req.Description = &tpl.Name
 	}
 

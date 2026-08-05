@@ -81,6 +81,7 @@ finances-kai add -250 кофе --tag еда --paid
 finances-kai add -1500 "подписка" --cp Netflix --currency USD --date yesterday
 finances-kai new обед                      # сумма и теги из шаблона
 finances-kai new аренда 45000 --date 2026-08-01
+finances-kai new обед --description "бизнес-ланч у офиса"
 
 finances-kai edit 11111111 --amount -300 --paid
 finances-kai edit 11111111 --tag еда --tag кафе    # теги заменяются целиком
