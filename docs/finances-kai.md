@@ -1,8 +1,11 @@
 ---
 url: https://notes.kaidstor.ru/021c9fd8-b19f-4c76-acd0-1486e8d1b501
 uuid: 021c9fd8-b19f-4c76-acd0-1486e8d1b501
-title: finances-kai — учёт финансов из терминала
-tags: finances-kai, finances, cli, go
+type: guide
+title: "finances-kai — учёт финансов из терминала"
+description: Полное руководство по CLI finances-kai от установки и токена до платежей, шаблонов, фильтров по именам тегов и контрагентов, экспорта счетов и разбора частых ошибок.
+tags: [finances-kai, finances, cli, go]
+generated: { by: "process:okf-migration", at: "2026-08-10T08:49:11Z" }
 ---
 
 CLI к приложению учёта доходов и расходов
