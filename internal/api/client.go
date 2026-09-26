@@ -38,6 +38,25 @@ func New(baseURL, token string) *Client {
 // а не показывают сырое «401».
 var ErrUnauthorized = errors.New("не авторизован")
 
+// Error — приложение ответило, но не успехом. Status по нему CLI выбирает код
+// выхода: 404 — «не найдено», остальное — «ответил, но не применил».
+type Error struct {
+	Prefix  string // «GET /api/payments», «экспорт»
+	Status  int
+	Message string
+	// NotJSON — ответ не JSON: почти всегда прокси или страница ошибки перед
+	// приложением, до него самого запрос не дошёл.
+	NotJSON    bool
+	statusText string
+}
+
+func (e *Error) Error() string {
+	if e.NotJSON {
+		return fmt.Sprintf("%s: сервер ответил %s, а не JSON: %s", e.Prefix, e.statusText, e.Message)
+	}
+	return e.Prefix + ": " + e.Message
+}
+
 type envelope struct {
 	Success bool            `json:"success"`
 	Data    json.RawMessage `json:"data"`
@@ -75,21 +94,17 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 		return fmt.Errorf("%s %s: читаю ответ: %w", method, path, err)
 	}
 
+	prefix := method + " " + path
 	var env envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
-		// Не JSON — почти всегда прокси или страница ошибки перед приложением.
-		return fmt.Errorf("%s %s: сервер ответил %s, а не JSON: %s",
-			method, path, resp.Status, snippet(raw))
+		return notJSON(prefix, resp, raw)
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		return fmt.Errorf("%w: %s", ErrUnauthorized, env.Error)
 	}
 	if !env.Success {
-		if env.Error == "" {
-			env.Error = resp.Status
-		}
-		return fmt.Errorf("%s %s: %s", method, path, env.Error)
+		return failed(prefix, resp, env.Error)
 	}
 
 	if out != nil && len(env.Data) > 0 {
@@ -98,6 +113,18 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 		}
 	}
 	return nil
+}
+
+func notJSON(prefix string, resp *http.Response, raw []byte) *Error {
+	return &Error{Prefix: prefix, Status: resp.StatusCode, Message: snippet(raw),
+		NotJSON: true, statusText: resp.Status}
+}
+
+func failed(prefix string, resp *http.Response, message string) *Error {
+	if message == "" {
+		message = resp.Status
+	}
+	return &Error{Prefix: prefix, Status: resp.StatusCode, Message: message}
 }
 
 func snippet(raw []byte) string {
@@ -198,17 +225,13 @@ func (c *Client) UploadFile(ctx context.Context, paymentID, name, contentType st
 
 	var env envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
-		return PaymentFile{}, fmt.Errorf("загрузка файла: сервер ответил %s, а не JSON: %s",
-			resp.Status, snippet(raw))
+		return PaymentFile{}, notJSON("загрузка файла", resp, raw)
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
 		return PaymentFile{}, fmt.Errorf("%w: %s", ErrUnauthorized, env.Error)
 	}
 	if !env.Success {
-		if env.Error == "" {
-			env.Error = resp.Status
-		}
-		return PaymentFile{}, fmt.Errorf("загрузка файла: %s", env.Error)
+		return PaymentFile{}, failed("загрузка файла", resp, env.Error)
 	}
 
 	var out PaymentFile
@@ -289,9 +312,9 @@ func (c *Client) Export(ctx context.Context, query url.Values) ([]byte, string, 
 			if resp.StatusCode == http.StatusUnauthorized {
 				return nil, "", fmt.Errorf("%w: %s", ErrUnauthorized, env.Error)
 			}
-			return nil, "", fmt.Errorf("экспорт: %s", env.Error)
+			return nil, "", failed("экспорт", resp, env.Error)
 		}
-		return nil, "", fmt.Errorf("экспорт: сервер ответил %s", resp.Status)
+		return nil, "", failed("экспорт", resp, "сервер ответил "+resp.Status)
 	}
 
 	name := "invoices.zip"

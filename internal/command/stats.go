@@ -28,15 +28,15 @@ type tagStat struct {
 	IsOther bool    `json:"-"`
 }
 
-func cmdStats(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("stats", statsHelp)
+func cmdStats(ctx context.Context, pr *output.Printer, args []string) error {
+	fs, profile := newFlagSet(pr, "stats", statsHelp)
 	period := fs.String("period", "month", "today|week|month|year|all")
 	from := fs.String("from", "", "начало периода, YYYY-MM-DD")
 	to := fs.String("to", "", "конец периода, YYYY-MM-DD")
 	income := fs.Bool("income", false, "считать доходы вместо расходов")
 	limit := fs.Int("limit", 15, "сколько тегов показать; 0 — все")
-	if err := fs.Parse(args); err != nil {
-		return errParsed
+	if err := parseFlags(fs, args); err != nil {
+		return err
 	}
 
 	rng, err := resolveRange(*period, *from, *to, time.Now())
@@ -55,8 +55,8 @@ func cmdStats(ctx context.Context, args []string) error {
 
 	stats, total, base, count := aggregateByTag(payments, rng, *income)
 
-	if *asJSON {
-		return output.JSON(map[string]any{
+	if pr.JSON {
+		return pr.Data(map[string]any{
 			"period":   rng.String(),
 			"currency": base,
 			"total":    total,
@@ -177,15 +177,15 @@ const forecastHelp = `finances-kai forecast [--months N] — прогноз тр
   finances-kai forecast --months 3
   finances-kai forecast --by-subscription`
 
-func cmdForecast(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("forecast", forecastHelp)
+func cmdForecast(ctx context.Context, pr *output.Printer, args []string) error {
+	fs, profile := newFlagSet(pr, "forecast", forecastHelp)
 	months := fs.Int("months", 6, "горизонт в месяцах, 1..60")
 	bySub := fs.Bool("by-subscription", false, "разбивка по подпискам вместо месяцев")
-	if err := fs.Parse(args); err != nil {
-		return errParsed
+	if err := parseFlags(fs, args); err != nil {
+		return err
 	}
 	if *months < 1 || *months > 60 {
-		return fmt.Errorf("--months: ожидается 1..60, получено %d", *months)
+		return usageErr("--months: ожидается 1..60, получено %d", *months)
 	}
 
 	s, err := open(*profile)
@@ -197,8 +197,8 @@ func cmdForecast(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(f)
+	if pr.JSON {
+		return pr.Data(f)
 	}
 
 	amount := func(v float64) string {

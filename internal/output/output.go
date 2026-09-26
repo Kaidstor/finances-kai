@@ -1,12 +1,10 @@
 // Package output — единственное место, где что-то печатается в stdout:
-// таблицы, суммы, даты, цвета и режим --json.
+// таблицы, суммы, даты, цвета и конверт режима --json.
 package output
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -56,14 +54,6 @@ func Date(raw string) string {
 		return raw[:i]
 	}
 	return raw
-}
-
-// JSON печатает значение как отступленный JSON — режим --json у всех команд.
-func JSON(v any) error {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	enc.SetEscapeHTML(false)
-	return enc.Encode(v)
 }
 
 // Table печатает шапку и строки, выравнивая колонки по ширине содержимого.

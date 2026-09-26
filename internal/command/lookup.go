@@ -53,13 +53,13 @@ func (i *tagIndex) resolve(query string) (api.Tag, error) {
 	case 1:
 		return i.tags[matches[0]], nil
 	case 0:
-		return api.Tag{}, fmt.Errorf("тег %q не найден; есть: %s", query, preview(names))
+		return api.Tag{}, notFound("тег %q не найден; есть: %s", query, preview(names))
 	default:
 		var found []string
 		for _, m := range matches {
 			found = append(found, i.path(i.tags[m]))
 		}
-		return api.Tag{}, fmt.Errorf("тег %q подходит к нескольким: %s — уточните",
+		return api.Tag{}, ambiguous("тег %q подходит к нескольким: %s — уточните",
 			query, strings.Join(found, ", "))
 	}
 }
@@ -97,13 +97,13 @@ func (i *cpIndex) resolve(query string) (api.Counterparty, error) {
 	case 1:
 		return i.items[matches[0]], nil
 	case 0:
-		return api.Counterparty{}, fmt.Errorf("контрагент %q не найден; есть: %s", query, preview(names))
+		return api.Counterparty{}, notFound("контрагент %q не найден; есть: %s", query, preview(names))
 	default:
 		var found []string
 		for _, m := range matches {
 			found = append(found, i.items[m].Name)
 		}
-		return api.Counterparty{}, fmt.Errorf("контрагент %q подходит к нескольким: %s — уточните",
+		return api.Counterparty{}, ambiguous("контрагент %q подходит к нескольким: %s — уточните",
 			query, strings.Join(found, ", "))
 	}
 }

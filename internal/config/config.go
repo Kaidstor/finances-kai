@@ -15,6 +15,9 @@ import (
 
 type Profile struct {
 	URL string `json:"url"`
+	// TokenRef — ссылка на токен в sec вида "<проект>/<KEY>"; читается через
+	// `sec get` после FINANCES_KAI_TOKEN и раньше системного хранилища.
+	TokenRef string `json:"token_ref,omitempty"`
 	// Currency — валюта по умолчанию для `add`; пустая означает «спросить у
 	// сервера», значение кешируется при login.
 	Currency string `json:"currency,omitempty"`
@@ -55,6 +58,22 @@ func Dir() string {
 }
 
 func path() string { return filepath.Join(Dir(), "config.json") }
+
+// Path — путь к файлу настроек, для doctor.
+func Path() string { return path() }
+
+// ErrNoProfile — профиль не выбран и не задан ни флагом, ни окружением.
+var ErrNoProfile = errors.New("профиль не выбран: заведите его через `finances-kai login`")
+
+// ProfileNotFoundError — названного профиля нет в настройках.
+type ProfileNotFoundError struct {
+	Name  string
+	Known []string
+}
+
+func (e *ProfileNotFoundError) Error() string {
+	return fmt.Sprintf("профиль %q не найден; есть: %s", e.Name, strings.Join(e.Known, ", "))
+}
 
 func Load() (*Config, error) {
 	cfg := &Config{Profiles: map[string]Profile{}}
@@ -126,6 +145,7 @@ func (c *Config) SetExport(name string, p ExportPreset) {
 // Resolve возвращает профиль, который нужно использовать: явно названный,
 // иначе current. FINANCES_KAI_PROFILE переопределяет current, а
 // FINANCES_KAI_URL позволяет работать вообще без сохранённого профиля.
+// FINANCES_KAI_TOKEN_REF подменяет token_ref профиля.
 func (c *Config) Resolve(explicit string) (name string, p Profile, err error) {
 	name = explicit
 	if name == "" {
@@ -141,16 +161,23 @@ func (c *Config) Resolve(explicit string) (name string, p Profile, err error) {
 		}
 		p = c.Profiles[name]
 		p.URL = url
+		applyTokenRefEnv(&p)
 		return name, p, nil
 	}
 
 	if name == "" {
-		return "", Profile{}, errors.New("профиль не выбран: заведите его через `finances-kai login`")
+		return "", Profile{}, ErrNoProfile
 	}
 	p, ok := c.Profiles[name]
 	if !ok {
-		return "", Profile{}, fmt.Errorf("профиль %q не найден; есть: %s",
-			name, strings.Join(c.Names(), ", "))
+		return "", Profile{}, &ProfileNotFoundError{Name: name, Known: c.Names()}
 	}
+	applyTokenRefEnv(&p)
 	return name, p, nil
+}
+
+func applyTokenRefEnv(p *Profile) {
+	if ref := strings.TrimSpace(os.Getenv("FINANCES_KAI_TOKEN_REF")); ref != "" {
+		p.TokenRef = ref
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Kaidstor/finances-kai/internal/api"
 	"github.com/Kaidstor/finances-kai/internal/output"
 )
 
@@ -42,19 +43,18 @@ const attachHelp = `finances-kai attach <id> <файл>… — приложит�
   finances-kai attach 11111111 --list
   finances-kai attach 11111111 --rm <id-файла>`
 
-func cmdAttach(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("attach", attachHelp)
+func cmdAttach(ctx context.Context, pr *output.Printer, args []string) error {
+	fs, profile := newFlagSet(pr, "attach", attachHelp)
 	list := fs.Bool("list", false, "показать вложения платежа")
 	remove := fs.String("rm", "", "удалить вложение по id")
 
 	words, flags := splitLeading(args)
-	if err := fs.Parse(flags); err != nil {
-		return errParsed
+	if err := parseFlags(fs, flags); err != nil {
+		return err
 	}
 	words = append(words, fs.Args()...)
 	if len(words) == 0 {
-		fs.Usage()
-		return errParsed
+		return errUsage(fs, "не задан id платежа")
 	}
 
 	paymentID, paths := words[0], words[1:]
@@ -73,6 +73,9 @@ func cmdAttach(ctx context.Context, args []string) error {
 		if err := s.client.DeletePaymentFile(ctx, p.ID, *remove); err != nil {
 			return err
 		}
+		if pr.JSON {
+			return pr.Data(map[string]any{"payment_id": p.ID, "file_id": *remove, "deleted": true})
+		}
 		fmt.Println(output.Yellow("вложение удалено"), *remove)
 		return nil
 
@@ -81,8 +84,8 @@ func cmdAttach(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		if *asJSON {
-			return output.JSON(files)
+		if pr.JSON {
+			return pr.Data(files)
 		}
 		if len(files) == 0 {
 			fmt.Printf("У платежа %s вложений нет\n", describe(p))
@@ -107,38 +110,60 @@ func cmdAttach(ctx context.Context, args []string) error {
 		types[i] = contentType
 	}
 
+	uploaded := make([]api.PaymentFile, 0, len(paths))
 	for i, path := range paths {
 		content, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("читаю %s: %w", path, err)
+		if err == nil {
+			var file api.PaymentFile
+			file, err = s.client.UploadFile(ctx, p.ID, filepath.Base(path), types[i], content)
+			if err == nil {
+				uploaded = append(uploaded, file)
+				if !pr.JSON {
+					fmt.Printf("%s %s · %s %s\n", output.Green("приложен"), file.OriginalName,
+						humanSize(int(file.Size)), output.Dim(shortID(file.ID)))
+				}
+				continue
+			}
+		} else {
+			err = fmt.Errorf("читаю %s: %w", path, err)
 		}
-		file, err := s.client.UploadFile(ctx, p.ID, filepath.Base(path), types[i], content)
-		if err != nil {
-			return err
+		if pr.JSON && len(uploaded) > 0 {
+			names := make([]string, len(uploaded))
+			for j, f := range uploaded {
+				names[j] = f.OriginalName + " (" + f.ID + ")"
+			}
+			pr.Warn("до отказа приложены: %s", strings.Join(names, ", "))
 		}
-		fmt.Printf("%s %s · %s %s\n", output.Green("приложен"), file.OriginalName,
-			humanSize(int(file.Size)), output.Dim(shortID(file.ID)))
+		return err
+	}
+	if pr.JSON {
+		return pr.Data(attached{PaymentID: p.ID, Files: uploaded})
 	}
 	fmt.Printf("%s\n", output.Dim("к платежу: "+describe(p)+" от "+output.Date(p.Date)))
 	return nil
+}
+
+type attached struct {
+	PaymentID string            `json:"payment_id"`
+	Files     []api.PaymentFile `json:"files"`
 }
 
 // checkUploadable проверяет файл и заодно отдаёт MIME-тип для отправки.
 func checkUploadable(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", fmt.Errorf("файл %s: %w", path, err)
+		return "", usageErr("файл %s: %w", path, err)
 	}
 	if info.IsDir() {
-		return "", fmt.Errorf("%s — каталог, а не файл", path)
+		return "", usageErr("%s — каталог, а не файл", path)
 	}
 	if info.Size() > maxFileSize {
-		return "", fmt.Errorf("%s весит %s, максимум 10 МБ", path, humanSize(int(info.Size())))
+		return "", usageErr("%s весит %s, максимум 10 МБ", path, humanSize(int(info.Size())))
 	}
 	ext := strings.ToLower(filepath.Ext(path))
 	contentType, ok := uploadTypes[ext]
 	if !ok {
-		return "", fmt.Errorf("%s: расширение %q сервер не принимает; можно jpg, png, gif, webp, pdf, txt, csv, doc(x), xls(x)",
+		return "", usageErr("%s: расширение %q сервер не принимает; можно jpg, png, gif, webp, pdf, txt, csv, doc(x), xls(x)",
 			path, ext)
 	}
 	return contentType, nil

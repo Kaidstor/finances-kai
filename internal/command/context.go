@@ -2,14 +2,17 @@ package command
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/Kaidstor/finances-kai/internal/api"
 	"github.com/Kaidstor/finances-kai/internal/config"
 	"github.com/Kaidstor/finances-kai/internal/keyring"
+	"github.com/Kaidstor/finances-kai/internal/output"
 )
 
 // session — всё, что нужно команде: клиент, имя профиля и его настройки.
@@ -22,23 +25,37 @@ type session struct {
 	currency string
 }
 
-// newFlagSet заводит набор флагов с общими для всех команд --profile и --json.
-// Возвращает указатели, которые становятся валидными после Parse.
-func newFlagSet(name, help string) (fs *flag.FlagSet, profile *string, asJSON *bool) {
+// newFlagSet заводит набор флагов с общим для всех команд --profile. Указатель
+// становится валидным после Parse. --json и --human сюда не входят: их
+// вынимает Run из любого места argv.
+//
+// В режиме --json пакет flag молчит о неверном флаге — текст уходит в конверт;
+// справка по -h печатается в stderr в обоих режимах.
+func newFlagSet(p *output.Printer, name, help string) (fs *flag.FlagSet, profile *string) {
 	fs = flag.NewFlagSet(name, flag.ContinueOnError)
+	if p.JSON {
+		fs.SetOutput(io.Discard)
+	}
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, help)
 		fmt.Fprintln(os.Stderr, "\nФлаги:")
+		defer fs.SetOutput(fs.Output())
+		fs.SetOutput(os.Stderr)
 		fs.PrintDefaults()
 	}
 	profile = fs.String("profile", "", "профиль вместо текущего")
-	asJSON = fs.Bool("json", false, "машиночитаемый вывод")
-	return fs, profile, asJSON
+	return fs, profile
+}
+
+// loadConfig — config.Load с классом ошибки config.
+func loadConfig() (*config.Config, error) {
+	cfg, err := config.Load()
+	return cfg, configErr(err)
 }
 
 // open поднимает сессию: находит профиль и токен, собирает клиент.
 func open(profileFlag string) (*session, error) {
-	cfg, err := config.Load()
+	cfg, err := loadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -47,16 +64,19 @@ func open(profileFlag string) (*session, error) {
 		return nil, err
 	}
 	if p.URL == "" {
-		return nil, fmt.Errorf("у профиля %q не задан адрес; поправьте через `finances-kai profile add %s <url>`", name, name)
+		return nil, configErr(fmt.Errorf("у профиля %q не задан адрес; поправьте через `finances-kai profile add %s <url>`", name, name))
 	}
 
-	token, _, err := keyring.Get(name)
+	token, err := keyring.Get(name, p.TokenRef)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return nil, authErr("нет токена для профиля %q: выполните `finances-kai login --profile %s`", name, name)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("нет токена для профиля %q: выполните `finances-kai login --profile %s`", name, name)
+		return nil, authErr("%s", err)
 	}
 
 	return &session{
-		client:   api.New(p.URL, token),
+		client:   api.New(p.URL, token.Value),
 		profile:  name,
 		cfg:      cfg,
 		url:      p.URL,

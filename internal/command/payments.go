@@ -19,8 +19,8 @@ const lsHelp = `finances-kai ls [фильтры] — платежи за пер�
   finances-kai ls --period year --type expense
   finances-kai ls --from 2026-01-01 --to 2026-03-31 --tag еда`
 
-func cmdList(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("ls", lsHelp)
+func cmdList(ctx context.Context, pr *output.Printer, args []string) error {
+	fs, profile := newFlagSet(pr, "ls", lsHelp)
 	period := fs.String("period", "month", "today|week|month|year|all")
 	from := fs.String("from", "", "начало периода, YYYY-MM-DD")
 	to := fs.String("to", "", "конец периода, YYYY-MM-DD")
@@ -31,8 +31,8 @@ func cmdList(ctx context.Context, args []string) error {
 	var tags, cps stringList
 	fs.Var(&tags, "tag", "тег; флаг можно повторять")
 	fs.Var(&cps, "cp", "контрагент; флаг можно повторять")
-	if err := fs.Parse(args); err != nil {
-		return errParsed
+	if err := parseFlags(fs, args); err != nil {
+		return err
 	}
 
 	rng, err := resolveRange(*period, *from, *to, time.Now())
@@ -82,8 +82,8 @@ func cmdList(ctx context.Context, args []string) error {
 		return output.Date(filtered[i].Date) > output.Date(filtered[j].Date)
 	})
 
-	if *asJSON {
-		return output.JSON(filtered)
+	if pr.JSON {
+		return pr.Data(filtered)
 	}
 	printPayments(filtered, rng, *limit)
 	return nil
@@ -176,7 +176,7 @@ const addHelp = `finances-kai add <сумма> [описание] — созда
   finances-kai add 120000 "зарплата" --date yesterday --paid
   finances-kai add -1500 --tag подписки --cp Netflix --currency USD`
 
-func cmdAdd(ctx context.Context, args []string) error {
+func cmdAdd(ctx context.Context, pr *output.Printer, args []string) error {
 	// Сумма идёт первым позиционным аргументом, но "-250" неотличимо от флага,
 	// поэтому забираем её до разбора флагов.
 	amount, rest, err := takeAmount(args)
@@ -184,7 +184,7 @@ func cmdAdd(ctx context.Context, args []string) error {
 		return err
 	}
 
-	fs, profile, asJSON := newFlagSet("add", addHelp)
+	fs, profile := newFlagSet(pr, "add", addHelp)
 	date := fs.String("date", "today", "today|yesterday|tomorrow|YYYY-MM-DD")
 	currency := fs.String("currency", "", "RUB|USD|KZT (по умолчанию валюта профиля)")
 	paid := fs.Bool("paid", false, "пометить оплаченным (по умолчанию неоплаченный, как в веб-форме)")
@@ -193,8 +193,8 @@ func cmdAdd(ctx context.Context, args []string) error {
 	fs.Var(&cps, "cp", "контрагент; флаг можно повторять")
 
 	words, flags := splitLeading(rest)
-	if err := fs.Parse(flags); err != nil {
-		return errParsed
+	if err := parseFlags(fs, flags); err != nil {
+		return err
 	}
 
 	// Слова после флагов тоже относятся к описанию: `add -250 --paid кофе`.
@@ -237,8 +237,8 @@ func cmdAdd(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(created)
+	if pr.JSON {
+		return pr.Data(created)
 	}
 	fmt.Printf("%s %s · %s\n", output.Green("создан"), colorAmount(created), describe(created))
 	fmt.Printf("%s\n", output.Dim(created.ID))
@@ -254,23 +254,22 @@ const newHelp = `finances-kai new <шаблон> [сумма] — создать
   finances-kai new "аренда" 45000 --date yesterday
   finances-kai new обед --description "бизнес-ланч у офиса"`
 
-func cmdNew(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("new", newHelp)
+func cmdNew(ctx context.Context, pr *output.Printer, args []string) error {
+	fs, profile := newFlagSet(pr, "new", newHelp)
 	date := fs.String("date", "today", "today|yesterday|tomorrow|YYYY-MM-DD")
 	paid := fs.Bool("paid", false, "пометить оплаченным (иначе статус берётся из шаблона)")
 	description := fs.String("description", "", "описание вместо взятого из шаблона; пустая строка — без описания")
 
 	words, flags := splitLeading(args)
-	if err := fs.Parse(flags); err != nil {
-		return errParsed
+	if err := parseFlags(fs, flags); err != nil {
+		return err
 	}
 	words = append(words, fs.Args()...)
 	if len(words) == 0 {
-		fs.Usage()
-		return errParsed
+		return errUsage(fs, "не задано имя шаблона")
 	}
 	if len(words) > 2 {
-		return fmt.Errorf("ожидались имя шаблона и, опционально, сумма; получено %d аргументов", len(words))
+		return usageErr("ожидались имя шаблона и, опционально, сумма; получено %d аргументов", len(words))
 	}
 
 	name := words[0]
@@ -278,7 +277,7 @@ func cmdNew(ctx context.Context, args []string) error {
 	if len(words) > 1 {
 		override = words[1]
 		if _, err := strconv.ParseFloat(override, 64); err != nil {
-			return fmt.Errorf("сумма %q не число", override)
+			return usageErr("сумма %q не число", override)
 		}
 	}
 
@@ -306,7 +305,7 @@ func cmdNew(ctx context.Context, args []string) error {
 		amount = strings.TrimSpace(deref(tpl.Amount))
 	}
 	if amount == "" {
-		return fmt.Errorf("в шаблоне %q нет суммы — укажите её вторым аргументом", tpl.Name)
+		return usageErr("в шаблоне %q нет суммы — укажите её вторым аргументом", tpl.Name)
 	}
 	// Шаблон хранит сумму без знака, а направление — в поле type.
 	if deref(tpl.Type) == "expense" && !strings.HasPrefix(amount, "-") {
@@ -349,8 +348,8 @@ func cmdNew(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(created)
+	if pr.JSON {
+		return pr.Data(created)
 	}
 	fmt.Printf("%s %s · %s %s\n", output.Green("создан"), colorAmount(created),
 		describe(created), output.Dim("(шаблон "+tpl.Name+")"))
@@ -369,13 +368,13 @@ func pickTemplate(templates []api.Template, query string) (api.Template, error) 
 	case 1:
 		return templates[matches[0]], nil
 	case 0:
-		return api.Template{}, fmt.Errorf("шаблон %q не найден; есть: %s", query, preview(names))
+		return api.Template{}, notFound("шаблон %q не найден; есть: %s", query, preview(names))
 	default:
 		var found []string
 		for _, m := range matches {
 			found = append(found, templates[m].Name)
 		}
-		return api.Template{}, fmt.Errorf("шаблон %q подходит к нескольким: %s — уточните",
+		return api.Template{}, ambiguous("шаблон %q подходит к нескольким: %s — уточните",
 			query, strings.Join(found, ", "))
 	}
 }
@@ -384,8 +383,8 @@ const showHelp = `finances-kai show <id> — карточка платежа
 
 id можно указывать префиксом — тем, что печатает ls.`
 
-func cmdShow(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("show", showHelp)
+func cmdShow(ctx context.Context, pr *output.Printer, args []string) error {
+	fs, profile := newFlagSet(pr, "show", showHelp)
 	id, err := parseWithID(fs, args)
 	if err != nil {
 		return err
@@ -400,8 +399,8 @@ func cmdShow(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(p)
+	if pr.JSON {
+		return pr.Data(p)
 	}
 
 	fmt.Println(output.Bold(colorAmount(p)), "·", describe(p))
@@ -427,8 +426,8 @@ const rmHelp = `finances-kai rm <id> — удалить платёж
 
 id можно указывать префиксом — тем, что печатает ls.`
 
-func cmdRemove(ctx context.Context, args []string) error {
-	fs, profile, _ := newFlagSet("rm", rmHelp)
+func cmdRemove(ctx context.Context, pr *output.Printer, args []string) error {
+	fs, profile := newFlagSet(pr, "rm", rmHelp)
 	yes := fs.Bool("yes", false, "не спрашивать подтверждения")
 	id, err := parseWithID(fs, args)
 	if err != nil {
@@ -445,22 +444,33 @@ func cmdRemove(ctx context.Context, args []string) error {
 	}
 
 	if !*yes {
-		fmt.Printf("Удалить %s · %s от %s?\n", colorAmount(p), describe(p), output.Date(p.Date))
-		ok, err := confirm("Введите y для подтверждения: ")
+		fmt.Fprintf(pr.Info(), "Удалить %s · %s от %s?\n", colorAmount(p), describe(p), output.Date(p.Date))
+		ok, err := confirm(pr.Info(), "Введите y для подтверждения: ")
 		if err != nil {
 			return err
 		}
 		if !ok {
-			fmt.Println("отменено")
-			return nil
+			fmt.Fprintln(pr.Info(), "отменено")
+			return pr.Data(deleted{ID: p.ID, Deleted: false})
 		}
 	}
 
 	if err := s.client.DeletePayment(ctx, p.ID); err != nil {
 		return err
 	}
+	if pr.JSON {
+		return pr.Data(deleted{ID: p.ID, Deleted: true})
+	}
 	fmt.Println(output.Yellow("удалён"), p.ID)
 	return nil
+}
+
+// deleted — data конверта у команд удаления. Deleted=false — человек ответил
+// «нет» на вопрос подтверждения.
+type deleted struct {
+	ID      string `json:"id"`
+	Name    string `json:"name,omitempty"`
+	Deleted bool   `json:"deleted"`
 }
 
 // findPayment принимает и полный UUID, и префикс из вывода ls.
@@ -483,9 +493,9 @@ func (s *session) findPayment(ctx context.Context, query string) (api.Payment, e
 	case 1:
 		return found[0], nil
 	case 0:
-		return api.Payment{}, fmt.Errorf("платёж %q не найден", query)
+		return api.Payment{}, notFound("платёж %q не найден", query)
 	default:
-		return api.Payment{}, fmt.Errorf("префикс %q подходит к %d платежам — укажите больше символов",
+		return api.Payment{}, ambiguous("префикс %q подходит к %d платежам — укажите больше символов",
 			query, len(found))
 	}
 }

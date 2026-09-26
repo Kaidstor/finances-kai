@@ -21,13 +21,13 @@ func (r dateRange) empty() bool { return r.from == "" && r.to == "" }
 func resolveRange(period, from, to string, now time.Time) (dateRange, error) {
 	if from != "" || to != "" {
 		if err := checkDate(from); err != nil {
-			return dateRange{}, fmt.Errorf("--from: %w", err)
+			return dateRange{}, usageErr("--from: %w", err)
 		}
 		if err := checkDate(to); err != nil {
-			return dateRange{}, fmt.Errorf("--to: %w", err)
+			return dateRange{}, usageErr("--to: %w", err)
 		}
 		if from != "" && to != "" && from > to {
-			return dateRange{}, fmt.Errorf("--from %s позже --to %s", from, to)
+			return dateRange{}, usageErr("--from %s позже --to %s", from, to)
 		}
 		return dateRange{from: from, to: to}, nil
 	}
@@ -50,7 +50,7 @@ func resolveRange(period, from, to string, now time.Time) (dateRange, error) {
 	case "all":
 		return dateRange{}, nil
 	default:
-		return dateRange{}, fmt.Errorf("неизвестный период %q: today, week, month, year или all", period)
+		return dateRange{}, usageErr("неизвестный период %q: today, week, month, year или all", period)
 	}
 }
 
@@ -77,7 +77,7 @@ func resolveDay(s string, now time.Time) (string, error) {
 		return today.AddDate(0, 0, 1).Format(dateLayout), nil
 	}
 	if err := checkDate(s); err != nil {
-		return "", fmt.Errorf("--date: %w", err)
+		return "", usageErr("--date: %w", err)
 	}
 	return s, nil
 }

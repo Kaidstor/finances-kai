@@ -6,8 +6,9 @@
 //	internal/command  CLI-слой: роутер Run, usage, разбор флагов, все команды
 //	internal/api      HTTP-клиент к /api/*: Bearer, конверт {success,data,error}
 //	internal/config   профили (url + базовая валюта) в ~/.config/finances-kai
-//	internal/keyring  API-токен: env → системное хранилище ОС → файл
-//	internal/output   таблицы, цвета, --json, форматирование сумм и дат
+//	internal/keyring  API-токен: env → sec по token_ref → хранилище ОС → файл
+//	internal/output   таблицы, цвета, конверт --json, форматирование сумм и дат
+//	internal/exit     коды выхода 0–4 и 130
 package main
 
 import (

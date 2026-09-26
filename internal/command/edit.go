@@ -20,8 +20,8 @@ const editHelp = `finances-kai edit <id> [что менять] — правка 
   finances-kai edit 11111111 --tag еда --tag кафе      # теги заменяются целиком
   finances-kai edit 11111111 --description ""          # стереть описание`
 
-func cmdEdit(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("edit", editHelp)
+func cmdEdit(ctx context.Context, pr *output.Printer, args []string) error {
+	fs, profile := newFlagSet(pr, "edit", editHelp)
 	amount := fs.String("amount", "", "новая сумма; минус — расход")
 	date := fs.String("date", "", "today|yesterday|tomorrow|YYYY-MM-DD")
 	currency := fs.String("currency", "", "RUB|USD|KZT")
@@ -37,7 +37,7 @@ func cmdEdit(ctx context.Context, args []string) error {
 		return err
 	}
 	if *paid && *unpaid {
-		return fmt.Errorf("--paid и --unpaid взаимоисключающие")
+		return usageErr("--paid и --unpaid взаимоисключающие")
 	}
 	if err := checkEnum("--currency", *currency, "RUB", "USD", "KZT"); err != nil {
 		return err
@@ -48,7 +48,7 @@ func cmdEdit(ctx context.Context, args []string) error {
 
 	if isSet(fs, "amount") {
 		if _, err := strconv.ParseFloat(*amount, 64); err != nil {
-			return fmt.Errorf("--amount: %q не число", *amount)
+			return usageErr("--amount: %q не число", *amount)
 		}
 		req.Amount, changed = amount, true
 	}
@@ -73,7 +73,7 @@ func cmdEdit(ctx context.Context, args []string) error {
 	}
 
 	if !changed && len(tags) == 0 && len(cps) == 0 {
-		return fmt.Errorf("нечего менять: не передано ни одного поля")
+		return usageErr("нечего менять: не передано ни одного поля")
 	}
 
 	s, err := open(*profile)
@@ -103,8 +103,8 @@ func cmdEdit(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(after)
+	if pr.JSON {
+		return pr.Data(after)
 	}
 	fmt.Println(output.Green("обновлён"), after.ID)
 	printDiff(before, after)

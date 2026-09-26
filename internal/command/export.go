@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,8 +30,8 @@ const exportHelp = `finances-kai export [набор] [фильтры] — zip с
   finances-kai export --list
   finances-kai export --forget аренда`
 
-func cmdExport(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("export", exportHelp)
+func cmdExport(ctx context.Context, pr *output.Printer, args []string) error {
+	fs, profile := newFlagSet(pr, "export", exportHelp)
 	period := fs.String("period", "month", "today|week|month|year|all")
 	from := fs.String("from", "", "начало периода, YYYY-MM-DD")
 	to := fs.String("to", "", "конец периода, YYYY-MM-DD")
@@ -44,24 +45,27 @@ func cmdExport(ctx context.Context, args []string) error {
 	fs.Var(&cps, "cp", "контрагент; флаг можно повторять")
 
 	words, flags := splitLeading(args)
-	if err := fs.Parse(flags); err != nil {
-		return errParsed
+	if err := parseFlags(fs, flags); err != nil {
+		return err
 	}
 	words = append(words, fs.Args()...)
 	if len(words) > 1 {
-		return fmt.Errorf("ожидалось одно имя набора, получено %d аргументов", len(words))
+		return usageErr("ожидалось одно имя набора, получено %d аргументов", len(words))
+	}
+	if *out == "-" && pr.JSON {
+		return usageErr("-o - пишет zip в stdout и с --json несовместим: укажите файл")
 	}
 
-	cfg, err := config.Load()
+	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
 
 	switch {
 	case *list:
-		return listExportPresets(cfg, *asJSON)
+		return listExportPresets(pr, cfg)
 	case *forget != "":
-		return forgetExportPreset(cfg, *forget)
+		return forgetExportPreset(pr, cfg, *forget)
 	}
 
 	preset := config.ExportPreset{
@@ -74,7 +78,7 @@ func cmdExport(ctx context.Context, args []string) error {
 	if len(words) == 1 {
 		saved, ok := cfg.Exports[words[0]]
 		if !ok {
-			return fmt.Errorf("набор %q не найден; есть: %s",
+			return notFound("набор %q не найден; есть: %s",
 				words[0], preview(cfg.ExportNames()))
 		}
 		preset = mergePreset(saved, fs, tags, cps)
@@ -83,7 +87,10 @@ func cmdExport(ctx context.Context, args []string) error {
 	if *save != "" {
 		cfg.SetExport(*save, preset)
 		if err := cfg.Save(); err != nil {
-			return err
+			return configErr(err)
+		}
+		if pr.JSON {
+			return pr.Data(map[string]any{"name": *save, "preset": preset})
 		}
 		fmt.Printf("%s набор %s: %s\n", output.Green("сохранён"), output.Bold(*save),
 			describePreset(preset))
@@ -142,6 +149,13 @@ func cmdExport(ctx context.Context, args []string) error {
 	if err := os.WriteFile(name, zip, 0o600); err != nil {
 		return fmt.Errorf("сохраняю %s: %w", name, err)
 	}
+	if pr.JSON {
+		abs, err := filepath.Abs(name)
+		if err != nil {
+			abs = name
+		}
+		return pr.Data(map[string]any{"file": abs, "size": len(zip), "from": rng.from, "to": rng.to})
+	}
 	fmt.Printf("%s %s · %s · %s\n", output.Green("сохранено"), name,
 		humanSize(len(zip)), output.Dim(rng.String()))
 	return nil
@@ -189,9 +203,13 @@ func mergePreset(saved config.ExportPreset, fs *flag.FlagSet, tags, cps []string
 	return p
 }
 
-func listExportPresets(cfg *config.Config, asJSON bool) error {
-	if asJSON {
-		return output.JSON(cfg.Exports)
+func listExportPresets(pr *output.Printer, cfg *config.Config) error {
+	if pr.JSON {
+		presets := cfg.Exports
+		if presets == nil {
+			presets = map[string]config.ExportPreset{}
+		}
+		return pr.Data(presets)
 	}
 	if len(cfg.Exports) == 0 {
 		fmt.Println("Сохранённых наборов нет. Завести: finances-kai export --save <имя> [фильтры]")
@@ -205,13 +223,16 @@ func listExportPresets(cfg *config.Config, asJSON bool) error {
 	return nil
 }
 
-func forgetExportPreset(cfg *config.Config, name string) error {
+func forgetExportPreset(pr *output.Printer, cfg *config.Config, name string) error {
 	if _, ok := cfg.Exports[name]; !ok {
-		return fmt.Errorf("набор %q не найден; есть: %s", name, preview(cfg.ExportNames()))
+		return notFound("набор %q не найден; есть: %s", name, preview(cfg.ExportNames()))
 	}
 	delete(cfg.Exports, name)
 	if err := cfg.Save(); err != nil {
-		return err
+		return configErr(err)
+	}
+	if pr.JSON {
+		return pr.Data(deleted{ID: name, Name: name, Deleted: true})
 	}
 	fmt.Printf("%s набор %s\n", output.Yellow("удалён"), name)
 	return nil

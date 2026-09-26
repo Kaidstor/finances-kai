@@ -16,14 +16,14 @@ const tagsHelp = `finances-kai tags [add <имя>] — теги
   finances-kai tags
   finances-kai tags add "подписки" --color '#3b82f6'`
 
-func cmdTags(ctx context.Context, args []string) error {
+func cmdTags(ctx context.Context, pr *output.Printer, args []string) error {
 	if len(args) > 0 && args[0] == "add" {
-		return cmdTagAdd(ctx, args[1:])
+		return cmdTagAdd(ctx, pr, args[1:])
 	}
 
-	fs, profile, asJSON := newFlagSet("tags", tagsHelp)
-	if err := fs.Parse(args); err != nil {
-		return errParsed
+	fs, profile := newFlagSet(pr, "tags", tagsHelp)
+	if err := parseFlags(fs, args); err != nil {
+		return err
 	}
 
 	s, err := open(*profile)
@@ -35,8 +35,8 @@ func cmdTags(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(idx.tags)
+	if pr.JSON {
+		return pr.Data(idx.tags)
 	}
 	if len(idx.tags) == 0 {
 		fmt.Println("Тегов пока нет")
@@ -51,8 +51,9 @@ func cmdTags(ctx context.Context, args []string) error {
 	return nil
 }
 
-func cmdTagAdd(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("tags add", tagsHelp)
+func cmdTagAdd(ctx context.Context, pr *output.Printer, args []string) error {
+	pr.Command = "tags add"
+	fs, profile := newFlagSet(pr, "tags add", tagsHelp)
 	color := fs.String("color", "", "hex-цвет, например #3b82f6")
 	name, err := parseWithName(fs, args)
 	if err != nil {
@@ -73,8 +74,8 @@ func cmdTagAdd(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(tag)
+	if pr.JSON {
+		return pr.Data(tag)
 	}
 	fmt.Printf("%s тег %s %s\n", output.Green("создан"), tag.Name, output.Dim(tag.ID))
 	return nil
@@ -85,14 +86,14 @@ const cpHelp = `finances-kai cp [add <имя>] — контрагенты
   finances-kai cp
   finances-kai cp add "Азбука вкуса" --type organization --icon 🛒`
 
-func cmdCounterparties(ctx context.Context, args []string) error {
+func cmdCounterparties(ctx context.Context, pr *output.Printer, args []string) error {
 	if len(args) > 0 && args[0] == "add" {
-		return cmdCounterpartyAdd(ctx, args[1:])
+		return cmdCounterpartyAdd(ctx, pr, args[1:])
 	}
 
-	fs, profile, asJSON := newFlagSet("cp", cpHelp)
-	if err := fs.Parse(args); err != nil {
-		return errParsed
+	fs, profile := newFlagSet(pr, "cp", cpHelp)
+	if err := parseFlags(fs, args); err != nil {
+		return err
 	}
 
 	s, err := open(*profile)
@@ -104,8 +105,8 @@ func cmdCounterparties(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(idx.items)
+	if pr.JSON {
+		return pr.Data(idx.items)
 	}
 	if len(idx.items) == 0 {
 		fmt.Println("Контрагентов пока нет")
@@ -124,8 +125,9 @@ func cmdCounterparties(ctx context.Context, args []string) error {
 	return nil
 }
 
-func cmdCounterpartyAdd(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("cp add", cpHelp)
+func cmdCounterpartyAdd(ctx context.Context, pr *output.Printer, args []string) error {
+	pr.Command = "cp add"
+	fs, profile := newFlagSet(pr, "cp add", cpHelp)
 	kind := fs.String("type", "organization", "organization|person")
 	icon := fs.String("icon", "", "эмодзи")
 	name, err := parseWithName(fs, args)
@@ -150,8 +152,8 @@ func cmdCounterpartyAdd(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(cp)
+	if pr.JSON {
+		return pr.Data(cp)
 	}
 	fmt.Printf("%s контрагент %s %s\n", output.Green("создан"), cp.Name, output.Dim(cp.ID))
 	return nil
@@ -178,19 +180,19 @@ const templatesHelp = `finances-kai templates [add <имя>|rm <имя>] — ш�
 
 Создать платёж по шаблону: finances-kai new <шаблон> [сумма]`
 
-func cmdTemplates(ctx context.Context, args []string) error {
+func cmdTemplates(ctx context.Context, pr *output.Printer, args []string) error {
 	if len(args) > 0 {
 		switch args[0] {
 		case "add":
-			return cmdTemplateAdd(ctx, args[1:])
+			return cmdTemplateAdd(ctx, pr, args[1:])
 		case "rm", "delete":
-			return cmdTemplateRemove(ctx, args[1:])
+			return cmdTemplateRemove(ctx, pr, args[1:])
 		}
 	}
 
-	fs, profile, asJSON := newFlagSet("templates", templatesHelp)
-	if err := fs.Parse(args); err != nil {
-		return errParsed
+	fs, profile := newFlagSet(pr, "templates", templatesHelp)
+	if err := parseFlags(fs, args); err != nil {
+		return err
 	}
 
 	s, err := open(*profile)
@@ -202,8 +204,8 @@ func cmdTemplates(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(templates)
+	if pr.JSON {
+		return pr.Data(templates)
 	}
 	if len(templates) == 0 {
 		fmt.Println("Шаблонов пока нет")
@@ -222,8 +224,9 @@ func cmdTemplates(ctx context.Context, args []string) error {
 	return nil
 }
 
-func cmdTemplateAdd(ctx context.Context, args []string) error {
-	fs, profile, asJSON := newFlagSet("templates add", templatesHelp)
+func cmdTemplateAdd(ctx context.Context, pr *output.Printer, args []string) error {
+	pr.Command = "templates add"
+	fs, profile := newFlagSet(pr, "templates add", templatesHelp)
 	// Направление и сумма — разными флагами. Один флаг с необязательным
 	// значением здесь не сделать: пакет flag таких не умеет и в
 	// `--expense --tag еда` принял бы «--tag» за сумму.
@@ -250,7 +253,7 @@ func cmdTemplateAdd(ctx context.Context, args []string) error {
 	req := api.CreateTemplate{Name: name, Status: statusOf(*paid), Type: kind}
 	if *amount != "" {
 		if _, err := strconv.ParseFloat(*amount, 64); err != nil {
-			return fmt.Errorf("--amount: %q не число", *amount)
+			return usageErr("--amount: %q не число", *amount)
 		}
 		// Минус в шаблоне сломал бы `new`: там знак добавляется по type, и
 		// расход с минусом в шаблоне стал бы доходом.
@@ -276,16 +279,17 @@ func cmdTemplateAdd(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if *asJSON {
-		return output.JSON(tpl)
+	if pr.JSON {
+		return pr.Data(tpl)
 	}
 	fmt.Printf("%s шаблон %s %s\n", output.Green("создан"), tpl.Name, output.Dim(tpl.ID))
 	fmt.Printf("применить: finances-kai new %s\n", output.Bold(tpl.Name))
 	return nil
 }
 
-func cmdTemplateRemove(ctx context.Context, args []string) error {
-	fs, profile, _ := newFlagSet("templates rm", templatesHelp)
+func cmdTemplateRemove(ctx context.Context, pr *output.Printer, args []string) error {
+	pr.Command = "templates rm"
+	fs, profile := newFlagSet(pr, "templates rm", templatesHelp)
 	yes := fs.Bool("yes", false, "не спрашивать подтверждения")
 	name, err := parseWithName(fs, args)
 	if err != nil {
@@ -306,19 +310,22 @@ func cmdTemplateRemove(ctx context.Context, args []string) error {
 	}
 
 	if !*yes {
-		fmt.Printf("Удалить шаблон %s?\n", output.Bold(tpl.Name))
-		ok, err := confirm("Введите y для подтверждения: ")
+		fmt.Fprintf(pr.Info(), "Удалить шаблон %s?\n", output.Bold(tpl.Name))
+		ok, err := confirm(pr.Info(), "Введите y для подтверждения: ")
 		if err != nil {
 			return err
 		}
 		if !ok {
-			fmt.Println("отменено")
-			return nil
+			fmt.Fprintln(pr.Info(), "отменено")
+			return pr.Data(deleted{ID: tpl.ID, Name: tpl.Name, Deleted: false})
 		}
 	}
 
 	if err := s.client.DeleteTemplate(ctx, tpl.ID); err != nil {
 		return err
+	}
+	if pr.JSON {
+		return pr.Data(deleted{ID: tpl.ID, Name: tpl.Name, Deleted: true})
 	}
 	fmt.Println(output.Yellow("удалён шаблон"), tpl.Name)
 	return nil

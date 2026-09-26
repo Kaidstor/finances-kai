@@ -55,6 +55,17 @@ finances-kai doctor   # проверить, что всё сошлось
 Если хранилища нет, он ложится файлом `~/.config/finances-kai/tokens/<профиль>`
 с правами 0600, и `login` об этом предупредит.
 
+Если токен уже лежит в [sec](https://github.com/Kaidstor/sec), в профиль
+сохраняется только ссылка на него, а хранилище ОС не трогается:
+
+```bash
+finances-kai login --url https://paytracker.ru --token-ref finances/API_TOKEN
+```
+
+Порядок поиска токена: `FINANCES_KAI_TOKEN` → `sec get <token_ref>` →
+системное хранилище → файл. `doctor` показывает, откуда он взят, и маску
+`ab…yz (64 символов)`; о файле с токеном открытым текстом предупреждает.
+
 ## Команды
 
 | | |
@@ -88,7 +99,7 @@ finances-kai edit 11111111 --tag еда --tag кафе    # теги замен�
 finances-kai attach 11111111 ~/Downloads/чек.pdf
 
 finances-kai ls --period year --type expense --tag еда
-finances-kai ls --from 2026-01-01 --to 2026-03-31 --json | jq '.[].amount'
+finances-kai ls --from 2026-01-01 --to 2026-03-31 --json | jq '.data[].amount'
 
 finances-kai stats --period year
 finances-kai forecast --by-subscription
@@ -96,6 +107,30 @@ finances-kai forecast --by-subscription
 finances-kai templates add "обед" --amount 450 --tag еда --paid
 finances-kai export --period year -o 2026.zip
 ```
+
+### `--json` и коды выхода
+
+По умолчанию вывод — текст для человека. `--json` (в любом месте строки) на
+каждой команде печатает в stdout один конверт; отказ — тем же конвертом:
+
+```json
+{"v": 1, "command": "ls", "exit": 0, "data": [...], "error": null}
+{"v": 1, "command": "show", "exit": 3, "data": null,
+ "error": {"kind": "not_found", "message": "платёж \"zzzz\" не найден"}}
+```
+
+Предметные данные — в `data`, предупреждения — в `warning`. `kind`: `usage`,
+`config`, `auth`, `network`, `timeout`, `not_found`, `api`, `ambiguous`
+(имя подходит к нескольким), `confirm` (нужен `--yes`), `interrupted`.
+
+| Код | Смысл |
+|---|---|
+| 0 | сделано |
+| 1 | приложение ответило, но не применило: отвергло поле, внутренняя ошибка |
+| 2 | ошибка аргументов, настроек или токена; нужен `--yes`; нет связи |
+| 3 | не найдено: платёж, тег, контрагент, шаблон, профиль, набор; `export` без платежей |
+| 4 | приложение не ответило в срок |
+| 130 | прервано (Ctrl+C) |
 
 ### Сохранённые наборы для экспорта
 
@@ -181,6 +216,7 @@ finances-kai ls --profile prod                         # разово, не пе
 |---|---|
 | `FINANCES_KAI_URL` | адрес приложения; работает без сохранённого профиля |
 | `FINANCES_KAI_TOKEN` | токен вместо хранилища |
+| `FINANCES_KAI_TOKEN_REF` | ссылка на токен в sec вместо `token_ref` профиля |
 | `FINANCES_KAI_PROFILE` | профиль вместо текущего |
 | `FINANCES_KAI_HOME` | каталог конфигурации вместо `~/.config/finances-kai` |
 | `NO_COLOR` | отключить цвет |
@@ -196,7 +232,8 @@ just build
 
 Устройство: тонкий `main.go`, всё остальное в `internal/` —
 `command` (роутер и команды), `api` (HTTP-клиент), `config` (профили),
-`keyring` (токены), `output` (таблицы, цвета, форматирование).
+`keyring` (токены: env, sec, хранилище ОС), `output` (таблицы, цвета,
+конверт `--json`), `exit` (коды выхода).
 Из зависимостей — только стандартная библиотека.
 
 ## Релиз

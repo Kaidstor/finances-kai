@@ -1,5 +1,6 @@
-// Package keyring хранит API-токены профилей. Порядок поиска:
-// env FINANCES_KAI_TOKEN → системное хранилище ОС → файл в каталоге конфигурации.
+// Package keyring ищет API-токены профилей. Порядок поиска:
+// env FINANCES_KAI_TOKEN → sec по token_ref профиля → системное хранилище ОС →
+// файл в каталоге конфигурации (устаревший откат, doctor о нём предупреждает).
 //
 // Системное хранилище дёргается через штатные утилиты (`security` на macOS,
 // `secret-tool` на Linux), поэтому платформенных сборочных тегов здесь нет —
@@ -29,27 +30,94 @@ type Source string
 
 const (
 	SourceEnv   Source = "переменная FINANCES_KAI_TOKEN"
+	SourceSec   Source = "sec"
 	SourceOS    Source = "системное хранилище"
 	SourceFile  Source = "файл"
 	SourceNone  Source = "—"
 	backendNone        = ""
 )
 
-// Get возвращает токен профиля и источник, из которого он взят.
-func Get(profile string) (string, Source, error) {
+// Token — значение и откуда оно взято. Value наружу не печатается: для чата и
+// логов есть Mask.
+type Token struct {
+	Value  string
+	Source Source
+	// Ref — ссылка в sec, если токен взят оттуда.
+	Ref string
+}
+
+// Label — источник для человека: «sec finances/TOKEN», «системное хранилище».
+func (t Token) Label() string {
+	if t.Source == SourceSec {
+		return "sec " + t.Ref
+	}
+	return string(t.Source)
+}
+
+// Get ищет токен профиля. tokenRef — token_ref профиля; пустой пропускает sec.
+//
+// Заданный token_ref, который sec не отдал, — ошибка, а не откат на хранилище:
+// иначе молча подставился бы старый токен из Keychain, и doctor показал бы не
+// тот источник, который настроен.
+func Get(profile, tokenRef string) (Token, error) {
 	if t := strings.TrimSpace(os.Getenv("FINANCES_KAI_TOKEN")); t != "" {
-		return t, SourceEnv, nil
+		return Token{Value: t, Source: SourceEnv}, nil
+	}
+	if tokenRef != "" {
+		t, err := fromSec(tokenRef)
+		if err != nil {
+			return Token{Source: SourceNone}, fmt.Errorf("token_ref %s: %w", tokenRef, err)
+		}
+		return Token{Value: t, Source: SourceSec, Ref: tokenRef}, nil
 	}
 	if t, err := osRead(profile); err == nil && t != "" {
-		return t, SourceOS, nil
+		return Token{Value: t, Source: SourceOS}, nil
 	}
 	raw, err := os.ReadFile(filePath(profile))
 	if err == nil {
 		if t := strings.TrimSpace(string(raw)); t != "" {
-			return t, SourceFile, nil
+			return Token{Value: t, Source: SourceFile}, nil
 		}
 	}
-	return "", SourceNone, ErrNotFound
+	return Token{Source: SourceNone}, ErrNotFound
+}
+
+// FilePath — где лежит файловый откат токена профиля, для предупреждения doctor.
+func FilePath(profile string) string { return filePath(profile) }
+
+// Mask отдаёт представление токена, безопасное для чата и логов.
+func Mask(value string) string {
+	r := []rune(value)
+	if len(r) < 8 {
+		return fmt.Sprintf("(%d символов)", len(r))
+	}
+	return fmt.Sprintf("%s…%s (%d символов)", string(r[:2]), string(r[len(r)-2:]), len(r))
+}
+
+// FromSec читает значение по ссылке через `sec get`. Значение приходит в stdout
+// дочернего процесса и в argv не попадает; в argv только сама ссылка.
+func FromSec(ref string) (string, error) { return fromSec(ref) }
+
+func fromSec(ref string) (string, error) {
+	bin, err := exec.LookPath("sec")
+	if err != nil {
+		return "", fmt.Errorf("sec не найден в PATH: %w", err)
+	}
+	var stderr bytes.Buffer
+	cmd := exec.Command(bin, "get", ref)
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return "", fmt.Errorf("sec get: %s", msg)
+		}
+		return "", fmt.Errorf("sec get: %w", err)
+	}
+	t := strings.TrimSpace(string(out))
+	if t == "" {
+		return "", errors.New("sec get вернул пустое значение")
+	}
+	return t, nil
 }
 
 // Set кладёт токен в системное хранилище, а если его нет — в файл 0600.

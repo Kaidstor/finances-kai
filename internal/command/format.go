@@ -5,17 +5,15 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/Kaidstor/finances-kai/internal/api"
+	"github.com/Kaidstor/finances-kai/internal/exit"
 	"github.com/Kaidstor/finances-kai/internal/output"
 )
-
-// errParsed — флаги уже напечатали свою диагностику, второй раз печатать нечего.
-// Пустой текст: fail() по нему понимает, что своё сообщение добавлять не надо.
-var errParsed = errors.New("")
 
 func strPtr(s string) *string { return &s }
 
@@ -189,13 +187,12 @@ func splitLeading(args []string) (positional, flags []string) {
 // аргумент отделяется от флагов до Parse, иначе флаги за ним не применятся.
 func parseWithID(fs *flag.FlagSet, args []string) (string, error) {
 	words, flags := splitLeading(args)
-	if err := fs.Parse(flags); err != nil {
-		return "", errParsed
+	if err := parseFlags(fs, flags); err != nil {
+		return "", err
 	}
 	words = append(words, fs.Args()...)
 	if len(words) != 1 {
-		fs.Usage()
-		return "", errParsed
+		return "", errUsage(fs, "ожидается один id, получено %d аргументов", len(words))
 	}
 	return words[0], nil
 }
@@ -203,13 +200,12 @@ func parseWithID(fs *flag.FlagSet, args []string) (string, error) {
 // parseWithName — то же для команд вида `<команда> add <имя из нескольких слов>`.
 func parseWithName(fs *flag.FlagSet, args []string) (string, error) {
 	words, flags := splitLeading(args)
-	if err := fs.Parse(flags); err != nil {
-		return "", errParsed
+	if err := parseFlags(fs, flags); err != nil {
+		return "", err
 	}
 	name := strings.TrimSpace(strings.Join(append(words, fs.Args()...), " "))
 	if name == "" {
-		fs.Usage()
-		return "", errParsed
+		return "", errUsage(fs, "не задано имя")
 	}
 	return name, nil
 }
@@ -219,14 +215,15 @@ func parseWithName(fs *flag.FlagSet, args []string) (string, error) {
 func takeAmount(args []string) (amount string, rest []string, err error) {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, addHelp)
-		return "", nil, errParsed
+		return "", nil, &cliError{code: exit.Tool, kind: "usage", printed: true,
+			err: errors.New("не задана сумма")}
 	}
 	if args[0] == "-h" || args[0] == "--help" {
 		fmt.Fprintln(os.Stderr, addHelp)
-		return "", nil, errParsed
+		return "", nil, errHelp
 	}
 	if _, err := strconv.ParseFloat(args[0], 64); err != nil {
-		return "", nil, fmt.Errorf("первым аргументом ожидается сумма, получено %q", args[0])
+		return "", nil, usageErr("первым аргументом ожидается сумма, получено %q", args[0])
 	}
 	return args[0], args[1:], nil
 }
@@ -240,7 +237,7 @@ func checkEnum(flagName, value string, allowed ...string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("%s: ожидается %s, получено %q", flagName, strings.Join(allowed, "|"), value)
+	return usageErr("%s: ожидается %s, получено %q", flagName, strings.Join(allowed, "|"), value)
 }
 
 func plural(n int, one, few, many string) string {
@@ -264,17 +261,17 @@ func plural(n int, one, few, many string) string {
 //
 // Проверки на «стандартный ввод — терминал» мало: /dev/null тоже символьное
 // устройство, поэтому пустой ответ ловим и на чтении.
-func confirm(prompt string) (bool, error) {
-	needYes := errors.New("нужно подтверждение, а отвечать некому: повторите с --yes")
+func confirm(w io.Writer, prompt string) (bool, error) {
+	needYes := classed(exit.Tool, "confirm", "нужно подтверждение, а отвечать некому: повторите с --yes")
 
 	info, err := os.Stdin.Stat()
 	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
 		return false, needYes
 	}
-	fmt.Print(prompt)
+	fmt.Fprint(w, prompt)
 	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil && line == "" {
-		fmt.Println()
+		fmt.Fprintln(w)
 		return false, needYes
 	}
 	answer := strings.ToLower(strings.TrimSpace(line))
