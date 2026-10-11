@@ -50,7 +50,7 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}" # PAT с правом записи в tap-репо (secret в CI)
     directory: Casks
     homepage: "https://github.com/Kaidstor/finances-kai"
-    description: "CLI для учёта доходов и расходов: платежи, шаблоны, чеки, сводка и экспорт счетов из терминала"
+    description: "Учёт доходов и расходов из терминала: платежи, шаблоны, чеки и сводки"
     binaries:
       - finances-kai
     commit_author:
